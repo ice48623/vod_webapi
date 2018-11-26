@@ -23,12 +23,12 @@ CORS(app)
 socketio = SocketIO(app)
 
 MONGO_URL = os.getenv('MONGO_URL', 'localhost')
-MONGO_PORT = os.getenv('MONGO_PORT', 27017)
+MONGO_PORT = int(os.getenv('MONGO_PORT', 27017))
 MONGO_DB = os.getenv('MONGO_DB', 'my_db')
 MONGO_COLLECTION = os.getenv('MONGO_COLLECTION', 'my_collection')
 
 RABBIT_HOST = os.getenv('RABBIT_HOST', 'localhost')
-RABBIT_PORT = os.getenv('RABBIT_PORT', 5672)
+RABBIT_PORT = int(os.getenv('RABBIT_PORT', 5672))
 
 VALID_EXT = ['.mpeg4', '.mp4', '.avi', '.wmv', '.mpegps', '.flv', '.3gpp']
 
