@@ -43,6 +43,7 @@ LOG.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
+
 # Utils
 
 
@@ -71,22 +72,18 @@ def send_job(queue_name, message):
 
 # Flask Route
 
-@app.route("/")
-def hello():
-    print(request.session())
-    return "Hello World!"
-
-
-@app.route("/api/upload_vid", methods=['POST'])
+@app.route("/upload", methods=['POST'])
 def upload_vid():
-    vid_name = request.args.get('filename')
-    vid_title = request.args.get('title')
+
+    name = request.form.get('name')
+    video_id = ''
+    sid = ''
     vid_data = request.get_data()
     md5 = hashlib.md5(vid_data).hexdigest()
     # Cannot find the way to get session_id for now
 
     # Check valid vid using ext
-    _, ext = os.path.splitext(vid_name)
+    _, ext = os.path.splitext(name)
     if ext not in VALID_EXT:
         return Response(status=HTTPStatus.UNSUPPORTED_MEDIA_TYPE)
 
@@ -98,17 +95,18 @@ def upload_vid():
     # Make directory using keyID and save uploaded file
     path = os.path.join(app.config['videos'], f'{keyID}/')
     os.makedirs(path)
-    with open(path+vid_name, "wb") as f:
+    with open(path+name, "wb") as f:
         f.write(vid_data)
 
     # store data in mongodb
     data = {
-        'vid_id': keyID,
-        'vid_name': vid_name,
-        'vid_title': vid_title,
-        'vid_md5': md5,
-        'vid_comments': [],
-        'vid_like': 0,
+        'name' : name,
+        'video_id' : video_id,
+        'sid' : sid,
+        'md5' : md5,
+        'likes' : [],
+        'comments' : [],
+        'resolutions' : {},
     }
 
     collection.insert_one(data)
@@ -116,50 +114,76 @@ def upload_vid():
     return Response(status=HTTPStatus.OK)
 
 
-@app.route('/api/get_vid_status', methods=['GET'])
-def get_vid_status():
-    vid_id = request.args.get('vid_id')
-    search_result = collection.find_one({'vid_id': vid_id})
-    print(search_result)
+@app.route('/video/<video_id>', methods=['GET'])
+def get_vid_status(video_id):
+    search_result = collection.find_one({'video_id': video_id})
     if search_result == None:
         return Response(status=HTTPStatus.BAD_REQUEST)
-    json_packed = json.dumps(str(search_result))
-    return Response(json_packed, status=HTTPStatus.OK)
+
+    normalized_data = {
+        'name' : search_result['name'],
+        'video_id' : search_result['video_id'], 
+        'sid' : search_result['sid'],
+        'resolutions' : search_result['resolutions'],
+        'likes' : len(search_result['likes']),
+        'comments' : search_result['comments'],
+    }
+    return jsonify({'data' : normalized_data})
 
 
-@app.route('/api/get_all_vid')
+@app.route('/video')
 def get_all_vid():
     vids = collection.find({})
-    json_packed = json.dumps({
-        'vids': str(list(vids))
-    })
-    print(json_packed)
-    return Response(json_packed, status=HTTPStatus.OK)
+    data = []
+    for doc in vids:
+        info = {
+            'name' : doc['name'],
+            'video_id' : doc['video_id'],
+            'sid' : doc['sid'],
+        }
+        data.append(info)
+    return jsonify({'data' : data})
 
 
-@app.route('/api/update_comment', methods=['POST'])
-def update_comment():
-    vid_id = request.args.get('vid_id')
-    comment = request.args.get('comment')
+@app.route('/comment', methods=['PUT'])
+def comment():
+    video_id = request.form.get('video_id')
+    comment = request.form.get('comment')
+    sid = request.form.get('sid')
     json_packed = json.dumps({
-        'vid_id': vid_id,
+        'vid_id': video_id,
+        'sid' : sid,
         'comment': comment,
     })
     send_job('comment', json_packed)
     return Response(json_packed, status=HTTPStatus.OK)
 
 
-@app.route('/api/update_like', methods=['POST'])
-def update_like():
-    vid_id = request.args.get('vid_id')
-    incr_by = request.args.get('incr_by')
-    print(incr_by)
+@app.route('/like', methods=['POST'])
+def like():
+    video_id = request.form.get('video_id')
+    sid = request.form.get('sid')
     json_packed = json.dumps({
-        'vid_id': vid_id,
-        'incr_by': int(incr_by),
+        'video_id': video_id,
+        'sid' : sid,
+        'like' : True,
     })
     send_job('like', json_packed)
     return Response(json_packed, status=HTTPStatus.OK)
+
+
+@app.route('/unlike', methods=['POST'])
+def unlike():
+    video_id = request.form.get('video_id')
+    sid = request.form.get('sid')
+    json_packed = json.dumps({
+        'video_id': video_id,
+        'sid' : sid,
+        'like' : False, 
+    })
+    send_job('like', json_packed)
+    return Response(json_packed, status=HTTPStatus.OK)
+
 
 
 if __name__ == '__main__':
