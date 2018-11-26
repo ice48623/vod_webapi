@@ -88,14 +88,18 @@ def upload_vid():
         return jsonify({'success': False, 'error': 'Unsupported Media Type'})
 
     # Make directory using keyID and save uploaded file
-    path = os.path.join(app.config['videos'], f'{video_id}/')
-    os.makedirs(path)
-    new_filename = name+ext
-    video_data.save(path+new_filename)
+    try:
+        path = os.path.join(app.config['videos'], f'{video_id}/')
+        os.makedirs(path)
+        new_filename = name+ext
+        video_data.save(path+new_filename)
+    except (OSError, IOError):
+        return jsonify({'success': False, 'error': 'Save File Error'})
 
     data = {
         'video_id': video_id,
         'name': name,
+        'filename': new_filename,
         'username': username,
         'likes': [],
         'comments': [],
@@ -103,6 +107,15 @@ def upload_vid():
     }
 
     collection.insert_one(data)
+    
+    # Send Job to convert queue - Discuss Later 
+    # json_packed = json.dumps({
+    #     'video_id' : video_id,
+    #     'filename' : new_filename,
+    #     'username' : username
+    # })
+
+    # send_job('convert', json_packed)
 
     return jsonify({'success': True, 'error': ''})
 
@@ -116,6 +129,7 @@ def get_vid_status(video_id):
     normalized_data = {
         'name': search_result['name'],
         'video_id': search_result['video_id'],
+        'filename': search_result['filename'],
         'username': search_result['username'],
         'resolutions': search_result['resolutions'],
         'likes': len(search_result['likes']),
@@ -140,15 +154,15 @@ def get_all_vid():
 
 @app.route('/comment', methods=['PUT'])
 def comment():
-    video_id = request.form.get('video_id')
-    comment = request.form.get('comment')
-    username = request.form.get('username')
+    video_id = request.json.get('video_id')
+    comment = request.json.get('comment')
+    username = request.json.get('username')
     search_result = collection.find_one({'video_id': video_id})
     if search_result == None:
         return jsonify({'success': False, 'error': 'Video Not Found'})
 
     json_packed = json.dumps({
-        'vid_id': video_id,
+        'video_id': video_id,
         'username': username,
         'comment': comment,
     })
@@ -158,8 +172,8 @@ def comment():
 
 @app.route('/like', methods=['POST'])
 def like():
-    video_id = request.form.get('video_id')
-    username = request.form.get('username')
+    video_id = request.json.get('video_id')
+    username = request.json.get('username')
     search_result = collection.find_one({'video_id': video_id})
     if search_result == None:
         return jsonify({'success': False, 'error': 'Video Not Found'})
@@ -176,8 +190,8 @@ def like():
 
 @app.route('/unlike', methods=['POST'])
 def unlike():
-    video_id = request.form.get('video_id')
-    username = request.form.get('username')
+    video_id = request.json.get('video_id')
+    username = request.json.get('username')
     search_result = collection.find_one({'video_id': video_id})
     if search_result == None:
         return jsonify({'success': False, 'error': 'Video Not Found'})
@@ -193,5 +207,5 @@ def unlike():
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', debug=True)
+    app.run(host='0.0.0.0')
     # socketio.run(app, host='0.0.0.0')
