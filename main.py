@@ -47,16 +47,12 @@ LOG.basicConfig(
 # Utils
 
 
-def generate_key(size):
-    chars = string.ascii_letters + string.digits
-    return ''.join(random.choice(chars) for i in range(size))
-
-
-def hash_key(sid, title):
-    concat_data = sid+ time.time() +title
-    return hashlib.md5(concat_data).hexdigest()
+def hash_key(username, name):
+    concat_data = username + name + str(time.time())
+    return hashlib.md5(concat_data.encode('utf-8')).hexdigest()
 
 # Rabbit Sender
+
 
 def send_job(queue_name, message):
     connection = pika.BlockingConnection(
@@ -72,63 +68,60 @@ def send_job(queue_name, message):
 
 # Flask Route
 
+@app.route("/ping")
+def ping():
+    return "ping"
+
+
 @app.route("/upload", methods=['POST'])
 def upload_vid():
 
     name = request.form.get('name')
-    video_id = ''
-    sid = ''
-    vid_data = request.get_data()
-    md5 = hashlib.md5(vid_data).hexdigest()
-    # Cannot find the way to get session_id for now
+    username = request.form.get('username')
+    video_data = request.files.get('file')
+    filename = video_data.filename
+    video_id = hash_key(username, name)
 
     # Check valid vid using ext
-    _, ext = os.path.splitext(name)
+    _, ext = os.path.splitext(filename)
     if ext not in VALID_EXT:
-        return Response(status=HTTPStatus.UNSUPPORTED_MEDIA_TYPE)
-
-    # Check keys aleady exist
-    keyID = generate_key(6)
-    while collection.count_documents({"vid_id": keyID}) > 0:
-        keyID = generate_key(6)
+        return jsonify({'success': False, 'error': 'Unsupported Media Type'})
 
     # Make directory using keyID and save uploaded file
-    path = os.path.join(app.config['videos'], f'{keyID}/')
+    path = os.path.join(app.config['videos'], f'{video_id}/')
     os.makedirs(path)
-    with open(path+name, "wb") as f:
-        f.write(vid_data)
+    new_filename = name+ext
+    video_data.save(path+new_filename)
 
-    # store data in mongodb
     data = {
-        'name' : name,
-        'video_id' : video_id,
-        'sid' : sid,
-        'md5' : md5,
-        'likes' : [],
-        'comments' : [],
-        'resolutions' : {},
+        'video_id': video_id,
+        'name': name,
+        'username': username,
+        'likes': [],
+        'comments': [],
+        'resolutions': {},
     }
 
     collection.insert_one(data)
 
-    return Response(status=HTTPStatus.OK)
+    return jsonify({'success': True, 'error': ''})
 
 
 @app.route('/video/<video_id>', methods=['GET'])
 def get_vid_status(video_id):
     search_result = collection.find_one({'video_id': video_id})
     if search_result == None:
-        return Response(status=HTTPStatus.BAD_REQUEST)
+        return jsonify({'success': False, 'error': 'Video Not Found'})
 
     normalized_data = {
-        'name' : search_result['name'],
-        'video_id' : search_result['video_id'], 
-        'sid' : search_result['sid'],
-        'resolutions' : search_result['resolutions'],
-        'likes' : len(search_result['likes']),
-        'comments' : search_result['comments'],
+        'name': search_result['name'],
+        'video_id': search_result['video_id'],
+        'username': search_result['username'],
+        'resolutions': search_result['resolutions'],
+        'likes': len(search_result['likes']),
+        'comments': search_result['comments'],
     }
-    return jsonify({'data' : normalized_data})
+    return jsonify({'success': True, 'error': '', 'data': normalized_data})
 
 
 @app.route('/video')
@@ -137,64 +130,68 @@ def get_all_vid():
     data = []
     for doc in vids:
         info = {
-            'name' : doc['name'],
-            'video_id' : doc['video_id'],
-            'sid' : doc['sid'],
+            'name': doc['name'],
+            'video_id': doc['video_id'],
+            'username': doc['username'],
         }
         data.append(info)
-    return jsonify({'data' : data})
+    return jsonify({'success': True, 'error': '', 'data': data})
 
 
 @app.route('/comment', methods=['PUT'])
 def comment():
     video_id = request.form.get('video_id')
     comment = request.form.get('comment')
-    sid = request.form.get('sid')
+    username = request.form.get('username')
     search_result = collection.find_one({'video_id': video_id})
     if search_result == None:
-        return Response(status=HTTPStatus.BAD_REQUEST)
+        return jsonify({'success': False, 'error': 'Video Not Found'})
+
     json_packed = json.dumps({
         'vid_id': video_id,
-        'sid' : sid,
+        'username': username,
         'comment': comment,
     })
     send_job('comment', json_packed)
-    return Response(json_packed, status=HTTPStatus.OK)
+    return jsonify({'success': True, 'error': ''})
 
 
 @app.route('/like', methods=['POST'])
 def like():
     video_id = request.form.get('video_id')
-    sid = request.form.get('sid')
+    username = request.form.get('username')
     search_result = collection.find_one({'video_id': video_id})
     if search_result == None:
-        return Response(status=HTTPStatus.BAD_REQUEST)
+        return jsonify({'success': False, 'error': 'Video Not Found'})
+
     json_packed = json.dumps({
         'video_id': video_id,
-        'sid' : sid,
-        'like' : True,
+        'username': username,
+        'like': True,
     })
+
     send_job('like', json_packed)
-    return Response(json_packed, status=HTTPStatus.OK)
+    return jsonify({'success': True, 'error': ''})
 
 
 @app.route('/unlike', methods=['POST'])
 def unlike():
     video_id = request.form.get('video_id')
-    sid = request.form.get('sid')
+    username = request.form.get('username')
     search_result = collection.find_one({'video_id': video_id})
     if search_result == None:
-        return Response(status=HTTPStatus.BAD_REQUEST)
+        return jsonify({'success': False, 'error': 'Video Not Found'})
+
     json_packed = json.dumps({
         'video_id': video_id,
-        'sid' : sid,
-        'like' : False, 
+        'username': username,
+        'like': False,
     })
-    send_job('like', json_packed)
-    return Response(json_packed, status=HTTPStatus.OK)
 
+    send_job('like', json_packed)
+    return jsonify({'success': True, 'error': ''})
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0')
+    app.run(host='0.0.0.0', debug=True)
     # socketio.run(app, host='0.0.0.0')
