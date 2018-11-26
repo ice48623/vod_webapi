@@ -14,6 +14,7 @@ from pymongo import MongoClient
 import string
 import random
 import pika
+import time
 
 
 app = Flask(__name__)
@@ -49,30 +50,30 @@ def generate_key(size):
     chars = string.ascii_letters + string.digits
     return ''.join(random.choice(chars) for i in range(size))
 
+
+def hash_key(sid, title):
+    concat_data = sid+ time.time() +title
+    return hashlib.md5(concat_data).hexdigest()
+
 # Rabbit Sender
 
-# Example From Ice p2
+def send_job(queue_name, message):
+    connection = pika.BlockingConnection(
+        pika.ConnectionParameters(host=RABBIT_HOST, port=RABBIT_PORT))
+    channel = connection.channel()
 
-# def send_extract_job(bucket, filename):
-#     message = utils.make_extract_message(bucket, filename)
-#     send_job('extract', message)
+    channel.queue_declare(queue=queue_name, durable=True)
 
-
-# def send_job(queue_name, message):
-#     connection = pika.BlockingConnection(
-#         pika.ConnectionParameters(host=RABBIT_HOST, port=RABBIT_PORT))
-#     channel = connection.channel()
-
-#     channel.queue_declare(queue=queue_name, durable=True)
-
-#     channel.basic_publish(exchange='', routing_key=queue_name, body=message)
-#     LOG.info(f'Sent: {message} into queue: {queue_name}')
-#     connection.close()
+    channel.basic_publish(exchange='', routing_key=queue_name, body=message)
+    LOG.info(f'Sent: {message} into queue: {queue_name}')
+    connection.close()
 
 
 # Flask Route
+
 @app.route("/")
 def hello():
+    print(request.session())
     return "Hello World!"
 
 
@@ -82,10 +83,10 @@ def upload_vid():
     vid_title = request.args.get('title')
     vid_data = request.get_data()
     md5 = hashlib.md5(vid_data).hexdigest()
+    # Cannot find the way to get session_id for now
 
     # Check valid vid using ext
     _, ext = os.path.splitext(vid_name)
-    print(ext)
     if ext not in VALID_EXT:
         return Response(status=HTTPStatus.UNSUPPORTED_MEDIA_TYPE)
 
@@ -118,16 +119,11 @@ def upload_vid():
 @app.route('/api/get_vid_status', methods=['GET'])
 def get_vid_status():
     vid_id = request.args.get('vid_id')
-    search_result = collection.find({'vid_id': vid_id})
-    if search_result.count() == 0:
+    search_result = collection.find_one({'vid_id': vid_id})
+    print(search_result)
+    if search_result == None:
         return Response(status=HTTPStatus.BAD_REQUEST)
-    data = search_result.next()
-    comments = data['vid_comments']
-    like = data['vid_like']
-    json_packed = json.dumps({
-        'comments': comments,
-        'like': like,
-    })
+    json_packed = json.dumps(str(search_result))
     return Response(json_packed, status=HTTPStatus.OK)
 
 
@@ -141,14 +137,29 @@ def get_all_vid():
     return Response(json_packed, status=HTTPStatus.OK)
 
 
-@app.route('/api/update_comment')
+@app.route('/api/update_comment', methods=['POST'])
 def update_comment():
-    pass
+    vid_id = request.args.get('vid_id')
+    comment = request.args.get('comment')
+    json_packed = json.dumps({
+        'vid_id': vid_id,
+        'comment': comment,
+    })
+    send_job('comment', json_packed)
+    return Response(json_packed, status=HTTPStatus.OK)
 
 
-@app.route('/api/update_like')
+@app.route('/api/update_like', methods=['POST'])
 def update_like():
-    pass
+    vid_id = request.args.get('vid_id')
+    incr_by = request.args.get('incr_by')
+    print(incr_by)
+    json_packed = json.dumps({
+        'vid_id': vid_id,
+        'incr_by': int(incr_by),
+    })
+    send_job('like', json_packed)
+    return Response(json_packed, status=HTTPStatus.OK)
 
 
 if __name__ == '__main__':
