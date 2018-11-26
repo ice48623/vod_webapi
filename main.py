@@ -150,6 +150,9 @@ def comment():
     video_id = request.form.get('video_id')
     comment = request.form.get('comment')
     sid = request.form.get('sid')
+    search_result = collection.find_one({'video_id': video_id})
+    if search_result == None:
+        return Response(status=HTTPStatus.BAD_REQUEST)
     json_packed = json.dumps({
         'vid_id': video_id,
         'sid' : sid,
@@ -163,6 +166,9 @@ def comment():
 def like():
     video_id = request.form.get('video_id')
     sid = request.form.get('sid')
+    search_result = collection.find_one({'video_id': video_id})
+    if search_result == None:
+        return Response(status=HTTPStatus.BAD_REQUEST)
     json_packed = json.dumps({
         'video_id': video_id,
         'sid' : sid,
@@ -176,6 +182,9 @@ def like():
 def unlike():
     video_id = request.form.get('video_id')
     sid = request.form.get('sid')
+    search_result = collection.find_one({'video_id': video_id})
+    if search_result == None:
+        return Response(status=HTTPStatus.BAD_REQUEST)
     json_packed = json.dumps({
         'video_id': video_id,
         'sid' : sid,
@@ -187,5 +196,5 @@ def unlike():
 
 
 if __name__ == '__main__':
-    app.run()
+    app.run(host='0.0.0.0')
     # socketio.run(app, host='0.0.0.0')
