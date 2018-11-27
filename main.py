@@ -109,13 +109,16 @@ def upload_vid():
     collection.insert_one(data)
     
     # Send Job to convert queue - Discuss Later 
-    json_packed = json.dumps({
-        'video_id' : video_id,
-        'filename' : new_filename,
-        'uid' : uid
-    })
+    resolutions = [360,720,1080]
+    for r in resolutions:
+        json_packed = json.dumps({
+            'video_id' : video_id,
+            'filename' : new_filename,
+            'uid' : uid,
+            'resolution' : r
+        })
 
-    send_job('convert', json_packed)
+        send_job('convert', json_packed)
 
     return jsonify({'success': True, 'error': ''})
 
