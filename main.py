@@ -47,8 +47,8 @@ LOG.basicConfig(
 # Utils
 
 
-def hash_key(username, name):
-    concat_data = username + name + str(time.time())
+def hash_key(uid, name):
+    concat_data = uid + name + str(time.time())
     return hashlib.md5(concat_data.encode('utf-8')).hexdigest()
 
 # Rabbit Sender
@@ -77,10 +77,10 @@ def ping():
 def upload_vid():
 
     name = request.form.get('name')
-    username = request.form.get('username')
+    uid = request.form.get('uid')
     video_data = request.files.get('file')
     filename = video_data.filename
-    video_id = hash_key(username, name)
+    video_id = hash_key(uid, name)
 
     # Check valid vid using ext
     _, ext = os.path.splitext(filename)
@@ -100,7 +100,7 @@ def upload_vid():
         'video_id': video_id,
         'name': name,
         'filename': new_filename,
-        'username': username,
+        'uid': uid,
         'likes': [],
         'comments': [],
         'resolutions': {},
@@ -109,13 +109,13 @@ def upload_vid():
     collection.insert_one(data)
     
     # Send Job to convert queue - Discuss Later 
-    # json_packed = json.dumps({
-    #     'video_id' : video_id,
-    #     'filename' : new_filename,
-    #     'username' : username
-    # })
+    json_packed = json.dumps({
+        'video_id' : video_id,
+        'filename' : new_filename,
+        'uid' : uid
+    })
 
-    # send_job('convert', json_packed)
+    send_job('convert', json_packed)
 
     return jsonify({'success': True, 'error': ''})
 
@@ -130,7 +130,7 @@ def get_vid_status(video_id):
         'name': search_result['name'],
         'video_id': search_result['video_id'],
         'filename': search_result['filename'],
-        'username': search_result['username'],
+        'uid': search_result['uid'],
         'resolutions': search_result['resolutions'],
         'likes': len(search_result['likes']),
         'comments': search_result['comments'],
@@ -146,7 +146,7 @@ def get_all_vid():
         info = {
             'name': doc['name'],
             'video_id': doc['video_id'],
-            'username': doc['username'],
+            'uid': doc['uid'],
         }
         data.append(info)
     return jsonify({'success': True, 'error': '', 'data': data})
@@ -156,14 +156,14 @@ def get_all_vid():
 def comment():
     video_id = request.json.get('video_id')
     comment = request.json.get('comment')
-    username = request.json.get('username')
+    uid = request.json.get('uid')
     search_result = collection.find_one({'video_id': video_id})
     if search_result == None:
         return jsonify({'success': False, 'error': 'Video Not Found'})
 
     json_packed = json.dumps({
         'video_id': video_id,
-        'username': username,
+        'uid': uid,
         'comment': comment,
     })
     send_job('comment', json_packed)
@@ -173,14 +173,14 @@ def comment():
 @app.route('/like', methods=['POST'])
 def like():
     video_id = request.json.get('video_id')
-    username = request.json.get('username')
+    uid = request.json.get('uid')
     search_result = collection.find_one({'video_id': video_id})
     if search_result == None:
         return jsonify({'success': False, 'error': 'Video Not Found'})
 
     json_packed = json.dumps({
         'video_id': video_id,
-        'username': username,
+        'uid': uid,
         'like': True,
     })
 
@@ -191,14 +191,14 @@ def like():
 @app.route('/unlike', methods=['POST'])
 def unlike():
     video_id = request.json.get('video_id')
-    username = request.json.get('username')
+    uid = request.json.get('uid')
     search_result = collection.find_one({'video_id': video_id})
     if search_result == None:
         return jsonify({'success': False, 'error': 'Video Not Found'})
 
     json_packed = json.dumps({
         'video_id': video_id,
-        'username': username,
+        'uid': uid,
         'like': False,
     })
 
