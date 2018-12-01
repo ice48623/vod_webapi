@@ -13,15 +13,20 @@ import io
 import time
 from flask import Flask, jsonify, request, Response
 from flask_cors import CORS
+from flask_login import login_user, logout_user, login_required, LoginManager
 from werkzeug.exceptions import InternalServerError
+from werkzeug.security import generate_password_hash, check_password_hash
 from http import HTTPStatus
 from pymongo import MongoClient
 from kombu import Connection, Consumer, Exchange, Queue
 
+
 app = Flask(__name__)
 app.config['videos'] = f'{os.getcwd()}/videos'
-SIO = socketio.Server(async_mode='threading')
-app.wsgi_app = socketio.Middleware(SIO, app.wsgi_app)
+login_manager = LoginManager()
+login_manager.init_app(app)
+# SIO = socketio.Server(async_mode='threading')
+# app.wsgi_app = socketio.Middleware(SIO, app.wsgi_app)
 CORS(app)
 
 
@@ -42,6 +47,8 @@ mongoClient = MongoClient(f'mongodb://{MONGO_URL}', MONGO_PORT)
 
 db = mongoClient[MONGO_DB]
 collection = db[MONGO_COLLECTION]
+my_users = db['my_users']
+
 
 LOG = logging
 LOG.basicConfig(
@@ -242,6 +249,58 @@ def unlike():
     return jsonify({'success': True, 'error': ''})
 
 
+@app.route('/register', methods=['POST'])
+def register():
+    username = request.json.get('username')
+    password = request.json.get('password')
+    existing_user = my_users.find_one({'username': username})
+    if existing_user != None:
+        return jsonify({'success': False, 'error': 'Username already exist'})
+
+    hash_pwd = generate_password_hash(password, method='pbkdf2:sha1', salt_length=8)
+    my_users.insert_one({
+        'username': username,
+        'password': hash_pwd,
+    })
+
+    user = my_users.find_one({'username': username})
+    data = {
+        'uid': str(user['_id']),
+        'username': user['username'],
+    }
+    return jsonify({'success': True, 'error': '', 'data': data})
+
+
+# Not Done 
+@app.route('/login', methods=['POST'])
+def login():
+    username = request.json.get('username')
+    password = request.json.get('password')
+    existing_user = my_users.find_one({'username': username})
+    if existing_user == None:
+        return jsonify({'success': False, 'error': 'Username not found'})
+
+    user_pwd = existing_user['password']
+    if check_password_hash(user_pwd, password):
+        login_user(username)
+    else:
+        return jsonify({'success': False, 'error': 'Wrong password'})
+
+    data = {
+        'uid': existing_user['_id'],
+        'username': existing_user['username'],
+    }
+    return jsonify({'success': True, 'error': '', 'data': data})
+
+
+# Not Done
+@app.route('/logout', methods=['POST'])
+@login_required
+def logout():
+    logout_user()
+    return jsonify({'success': True, 'error': ''})
+
+
 # @SIO.on('connection')
 # def on_connection(sid):
 #     LOG.info(f'Client connected, sid : {sid}')
@@ -285,4 +344,4 @@ def unlike():
 if __name__ == '__main__':
     # RABBIT = RabbitThread()
     # add threaded=True for using RabbitThread()
-    app.run(host='0.0.0.0')
+    app.run(debug=True, host='0.0.0.0')
