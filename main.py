@@ -133,7 +133,7 @@ def upload_vid():
         'uid': uid,
         'likes': [],
         'comments': [],
-        'resolutions': [],
+        'source': [],
     }
 
     collection.insert_one(data)
@@ -164,7 +164,7 @@ def get_vid_status(video_id):
         'filename': search_result['filename'],
         'uid': search_result['uid'],
         'img': search_result['img'],
-        'resolutions': search_result['resolutions'],
+        'source': search_result['source'],
         'likes': len(search_result['likes']),
         'comments': search_result['comments'],
     }
