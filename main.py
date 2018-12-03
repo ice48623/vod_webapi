@@ -167,6 +167,13 @@ def get_vid_status(video_id):
     if search_result == None:
         return jsonify({'success': False, 'error': 'Video Not Found'})
 
+    uid = request.json.get('uid')
+    likes_uid = search_result['likes']
+    is_like = uid in likes_uid
+    likes = {
+        'amount' : len(likes_uid),
+        'is_like' : is_like,
+    }
     normalized_data = {
         'name': search_result['name'],
         'video_id': search_result['video_id'],
@@ -174,7 +181,7 @@ def get_vid_status(video_id):
         'uid': search_result['uid'],
         'img': search_result['img'],
         'source': search_result['source'],
-        'likes': len(search_result['likes']),
+        'likes': likes,
         'comments': search_result['comments'],
     }
     return jsonify({'success': True, 'error': '', 'data': normalized_data})
