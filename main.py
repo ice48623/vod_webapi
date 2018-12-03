@@ -42,6 +42,8 @@ VALID_VID_EXT = set(['.mpeg4', '.mp4', '.avi', '.wmv',
                      '.mpegps', '.flv', '.3gpp'])
 VALID_IMG_EXT = set(['.jpg', '.jpeg', '.png'])
 
+BASE_URL = os.getenv('BASE_URL', 'http://localhost:4000')
+
 
 mongoClient = MongoClient(f'mongodb://{MONGO_URL}', MONGO_PORT)
 
@@ -187,7 +189,7 @@ def get_all_vid():
             'name': doc['name'],
             'video_id': doc['video_id'],
             'uid': doc['uid'],
-            'img': doc['img'],
+            'img': f"{BASE_URL}/thumb/{doc['video_id']}/{doc['filename']}/thumb-1000.jpg",
             'likes': len(doc['likes']),
             'comments': len(doc['comments'])
         }
@@ -271,7 +273,7 @@ def register():
     return jsonify({'success': True, 'error': '', 'data': data})
 
 
-# Not Done 
+# Not Done
 @app.route('/login', methods=['POST'])
 def login():
     username = request.json.get('username')
