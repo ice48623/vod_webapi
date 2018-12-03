@@ -95,27 +95,18 @@ def upload_vid():
     uid = request.form.get('uid')
 
     video_data = request.files.get('file')
-    img_data = request.files.get('img')
 
     # Check uploaded Video and Image are None Type, or Not
     if video_data == None:
         return jsonify({'success': False, 'error': 'Video Not Found'})
 
-    if img_data == None:
-        return jsonify({'success': False, 'error': 'Image Not Found'})
-
     video_filename = video_data.filename
     video_id = hash_key(uid, name)
-    img_name = img_data.filename
 
     # Check valid vid using ext
     _, vid_ext = os.path.splitext(video_filename)
     if vid_ext not in VALID_VID_EXT:
         return jsonify({'success': False, 'error': 'Unsupported Media Type'})
-
-    _, img_ext = os.path.splitext(img_name)
-    if img_ext not in VALID_IMG_EXT:
-        return jsonify({'success': False, 'error': 'Unsupported Image Type'})
 
     # Make directory using keyID and save uploaded file
     path = os.path.join(app.config['videos'], f'{video_id}/')
@@ -127,18 +118,10 @@ def upload_vid():
     except (OSError, IOError):
         return jsonify({'success': False, 'error': 'Save Video File Error'})
 
-    try:
-        # Save the image in the same path as video
-        new_img_filename = name+img_ext
-        img_data.save(path+new_img_filename)
-    except (OSError, IOError):
-        return jsonify({'success': False, 'error': 'Save Image File Error'})
-
     data = {
         'video_id': video_id,
         'name': name,
         'filename': new_vid_filename,
-        'img': new_img_filename,
         'uid': uid,
         'likes': [],
         'comments': [],
@@ -161,7 +144,7 @@ def upload_vid():
     return jsonify({'success': True, 'error': ''})
 
 
-@app.route('/video/<video_id>', methods=['GET'])
+@app.route('/video/<video_id>', methods=['POST'])
 def get_vid_status(video_id):
     search_result = collection.find_one({'video_id': video_id})
     if search_result == None:
@@ -179,7 +162,6 @@ def get_vid_status(video_id):
         'video_id': search_result['video_id'],
         'filename': search_result['filename'],
         'uid': search_result['uid'],
-        'img': search_result['img'],
         'source': search_result['source'],
         'likes': likes,
         'comments': search_result['comments'],
