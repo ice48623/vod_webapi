@@ -211,6 +211,16 @@ def comment():
     send_job('comment', json_packed)
     return jsonify({'success': True, 'error': ''})
 
+@app.route('/comment/<video_id>', methods=['GET'])
+def get_comment(video_id):
+    search_result = collection.find_one({'video_id': video_id})
+    if search_result == None:
+        return jsonify({'success': False, 'error': 'Video Not Found'})
+
+    normalized_data = {
+        'comments': search_result['comments'],
+    }
+    return jsonify({'success': True, 'error': '', 'data': normalized_data})
 
 @app.route('/like', methods=['POST'])
 def like():
@@ -267,6 +277,8 @@ def register():
         'uid': str(user['_id']),
         'username': user['username'],
     }
+    user = User(user)
+    login_user(user,remember=True)
     return jsonify({'success': True, 'error': '', 'data': data})
 
 @app.route('/login', methods=['POST'])
