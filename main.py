@@ -11,10 +11,11 @@ import logging
 import hashlib
 import io
 import time
+import requests
 from bson import ObjectId
 from flask import Flask, jsonify, request, Response, session
 from flask_cors import CORS
-from flask_login import login_user, logout_user, login_required, current_user, LoginManager, UserMixin
+from flask_login import login_user, logout_user, login_required, current_user, LoginManager, UserMixin, confirm_login
 from werkzeug.exceptions import InternalServerError
 from werkzeug.security import generate_password_hash, check_password_hash
 from http import HTTPStatus
@@ -24,8 +25,8 @@ from kombu import Connection, Consumer, Exchange, Queue
 
 app = Flask(__name__)
 app.config['videos'] = f'{os.getcwd()}/videos'
-login_manager = LoginManager(app)
-# login_manager.init_app(app)
+login_manager = LoginManager()
+login_manager.init_app(app)
 # SIO = socketio.Server(async_mode='threading')
 # app.wsgi_app = socketio.Middleware(SIO, app.wsgi_app)
 CORS(app)
@@ -59,10 +60,9 @@ LOG.basicConfig(
 )
 
 class User(UserMixin):
-
-    def __init__(self,username):
-        self.id = str(my_users.find_one({'username':username})['_id'])
-        self.username = username
+    def __init__(self,user_doc):
+        self.id = str(user_doc['_id'])
+        self.username = user_doc['username']
 
 
 # Utils
@@ -297,8 +297,8 @@ def login():
 
     user_pwd = existing_user['password']
     if check_password_hash(user_pwd, password):
-        user = User(username)
-        login_user(user)
+        user = User(existing_user)
+        login_user(user,remember=True)
     else:
         return jsonify({'success': False, 'error': 'Wrong password'})
 
@@ -308,20 +308,34 @@ def login():
     }
     # print("authenticated : ",username," ",current_user.is_authenticated)
 
-    return jsonify({'success': True, 'error': '', 'data': data})
+    return jsonify({'success': current_user.is_authenticated, 'error': '', 'data': data})
 
+@app.route('/check',methods=['POST'])
+def check():
+    print(current_user)
+    return jsonify({'status':current_user.is_authenticated})
 
 # Not Done (work?????)
 @app.route('/logout', methods=['POST'])
 @login_required
 def logout():
+    print(current_user)
+    detected_error = ""
+    test_before_logout = current_user.is_authenticated
+    print("authentication status: ", test_before_logout)
     # print("authenticated : ",current_user.is_authenticated)
     logout_user()
-    return jsonify({'success': True, 'error': ''})
+    if(current_user.is_authenticated == True):
+        detected_error = "user is still logged in, WTF?"
+    return jsonify({'success': not current_user.is_authenticated, 'error': detected_error})
+
+@login_manager.unauthorized_handler
+def unauthorized():
+    return jsonify({'error':'user not authorized'})
 
 @login_manager.user_loader
-def user_loader(username):
-    user_doc = my_users.find_one({'username':username})
+def user_loader(user_id):
+    user_doc = my_users.find_one({'_id':ObjectId(user_id)})
     if user_doc is not None:
         return User(user_doc)
     return None
