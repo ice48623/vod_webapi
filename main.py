@@ -11,9 +11,10 @@ import logging
 import hashlib
 import io
 import time
-from flask import Flask, jsonify, request, Response
+from bson import ObjectId
+from flask import Flask, jsonify, request, Response, session
 from flask_cors import CORS
-from flask_login import login_user, logout_user, login_required, LoginManager
+from flask_login import login_user, logout_user, login_required, current_user, LoginManager, UserMixin
 from werkzeug.exceptions import InternalServerError
 from werkzeug.security import generate_password_hash, check_password_hash
 from http import HTTPStatus
@@ -23,12 +24,13 @@ from kombu import Connection, Consumer, Exchange, Queue
 
 app = Flask(__name__)
 app.config['videos'] = f'{os.getcwd()}/videos'
-login_manager = LoginManager()
-login_manager.init_app(app)
+login_manager = LoginManager(app)
+# login_manager.init_app(app)
 # SIO = socketio.Server(async_mode='threading')
 # app.wsgi_app = socketio.Middleware(SIO, app.wsgi_app)
 CORS(app)
 
+SECRET_KEY = os.getenv('SECRET_KEY','some-secret-key')
 
 MONGO_URL = os.getenv('MONGO_URL', 'localhost')
 MONGO_PORT = int(os.getenv('MONGO_PORT', 27017))
@@ -55,6 +57,12 @@ LOG.basicConfig(
     level=LOG.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
+
+class User(UserMixin):
+
+    def __init__(self,username):
+        self.id = str(my_users.find_one({'username':username})['_id'])
+        self.username = username
 
 
 # Utils
@@ -278,7 +286,7 @@ def register():
     return jsonify({'success': True, 'error': '', 'data': data})
 
 
-# Not Done 
+# Not Done (work?)
 @app.route('/login', methods=['POST'])
 def login():
     username = request.json.get('username')
@@ -289,24 +297,34 @@ def login():
 
     user_pwd = existing_user['password']
     if check_password_hash(user_pwd, password):
-        login_user(username)
+        user = User(username)
+        login_user(user)
     else:
         return jsonify({'success': False, 'error': 'Wrong password'})
 
     data = {
-        'uid': existing_user['_id'],
+        'uid': str(existing_user['_id']),
         'username': existing_user['username'],
     }
+    # print("authenticated : ",username," ",current_user.is_authenticated)
+
     return jsonify({'success': True, 'error': '', 'data': data})
 
 
-# Not Done
+# Not Done (work?????)
 @app.route('/logout', methods=['POST'])
 @login_required
 def logout():
+    # print("authenticated : ",current_user.is_authenticated)
     logout_user()
     return jsonify({'success': True, 'error': ''})
 
+@login_manager.user_loader
+def user_loader(username):
+    user_doc = my_users.find_one({'username':username})
+    if user_doc is not None:
+        return User(user_doc)
+    return None
 
 # @SIO.on('connection')
 # def on_connection(sid):
@@ -351,4 +369,5 @@ def logout():
 if __name__ == '__main__':
     # RABBIT = RabbitThread()
     # add threaded=True for using RabbitThread()
+    app.secret_key = SECRET_KEY
     app.run(debug=True, host='0.0.0.0')
