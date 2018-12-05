@@ -24,7 +24,7 @@ from kombu import Connection, Consumer, Exchange, Queue
 
 
 app = Flask(__name__)
-app.config['videos'] = f'{os.getcwd()}/videos'
+app.config['videos'] = os.getenv('BASE_VIDEOS_FOLDER', './videos')
 login_manager = LoginManager()
 login_manager.init_app(app)
 # SIO = socketio.Server(async_mode='threading')
