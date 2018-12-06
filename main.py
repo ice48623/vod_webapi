@@ -203,9 +203,10 @@ def comment():
     if search_result == None:
         return jsonify({'success': False, 'error': 'Video Not Found'})
 
+    user = my_users.find_one({"_id": ObjectId(uid)})
     json_packed = json.dumps({
         'video_id': video_id,
-        'uid': uid,
+        'username': user.get('username'),
         'comment': comment,
     })
     send_job('comment', json_packed)
